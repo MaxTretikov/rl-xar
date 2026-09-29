@@ -28,29 +28,58 @@ This downloads the default Hugging Face writer (`Qwen/Qwen2.5-0.5B-Instruct`) if
 
 The full pipeline uses a local Hugging Face causal language model as the trainable writer and a chat model for rubric generation, rubric scoring, meta-prompt revision, and held-out evaluation. The writer must be loadable locally by Transformers because it is generated from and LoRA-trained by the process. Chat interfaces are discovered through [Trance](https://github.com/MaxTretikov/trance) and used through Pydantic AI.
 
-Judge discovery is explicit and consent-gated:
+Judge settings do not belong in the TOML file. At the start of every `run`,
+`rlxar` asks Trance to scan the chat interfaces configured on the machine.
+Trance recognizes supported local CLI logins, provider accounts, and API-key
+environments, then reports each result's canonical provider ID, exact model,
+authentication kind, and configuration source.
+Discovery does not send an inference request. It may inspect local
+account state or invoke an installed CLI as part of checking a supported source.
 
-1. Copy `examples/demo.toml` to `examples/local.toml`. The example intentionally contains no judge settings; discovered judge selection is a user decision at run time.
-2. Run the discovery command:
+Copy the example configuration and configure any intended provider interface
+before starting discovery. If the interface requires an API key, set it first;
+for example:
 
-   ```sh
-   uv run rlxar judges
-   ```
+```sh
+cp examples/demo.toml examples/local.toml
+export OPENAI_API_KEY='your-api-key'
+```
 
-   Trance scans configured chat interfaces and prints every candidate's canonical provider ID, exact model, authentication kind, and configuration source. Discovery does not send model inference requests or consume a provider rate limit; depending on the configured interface, Trance may invoke an installed CLI to inspect authentication status. It does not select a judge.
-3. If the selected interface requires a key, export it according to the authentication information shown by `rlxar judges` before approving the run. For example:
+Then start the run:
 
-   ```sh
-   export OPENAI_API_KEY='your-api-key'
-   ```
+```sh
+uv run rlxar run --config examples/local.toml
+```
 
-4. Choose a displayed candidate and approve it before running the pipeline. Without `--model-provider`, an interactive terminal presents the discovered candidates and asks which one to use and for confirmation. For automation, provide the provider you have approved:
+This command discovers the available judges and, in an interactive terminal,
+asks you to choose one and confirm that RL-XAR may use it. The optional
+preflight command prints the same discovery results without starting a run:
 
-   ```sh
-   uv run rlxar run --config examples/local.toml --model-provider openai
-   ```
+```sh
+uv run rlxar judges
+```
 
-   `--model-provider` is explicit consent and makes the run noninteractive. The value is matched against Trance's canonical provider IDs, then the first matching discovery result is used. The run still displays all discovered judges and the exact selected model and configuration source before sending requests. Provider aliases include `codex` for `openai-codex` and `grok` for `grok-consumer`; the xAI API provider ID is `xai`. If no provider is supplied, interactive selection and confirmation remain required. A noninteractive run fails closed when the provider is missing or has no matching Trance result. Approved rubric and evaluation requests may consume provider rate limits.
+Seeing a credential or account does not prove that it is valid, has remaining
+quota, or is permitted to make the requested calls. Configure any required
+credentials before discovery as shown above.
+
+For automation, `--model-provider PROVIDER` is explicit consent and makes the
+run noninteractive:
+
+```sh
+uv run rlxar run --config examples/local.toml --model-provider openai
+```
+
+RL-XAR matches the value against Trance's canonical provider IDs and uses the
+first matching result. It prints all discovered candidates and the exact
+selected model and source before making judge requests. The aliases `codex` and
+`grok` select `openai-codex` and `grok-consumer`; the xAI API provider ID is
+`xai`. A missing provider match fails closed, so no run starts. After consent,
+Pydantic AI sends the actual rubric and evaluation requests through the chosen
+Trance model; those requests may consume provider quota or rate limits.
+
+A noninteractive run without `--model-provider` also fails closed, because it
+cannot obtain the required consent interactively.
 
 Set `output_dir` in the TOML or `RL_XAR_OUTPUT_DIR` in the environment to choose the external run root. Otherwise runs go to `/mnt/archive/runs/rl-xar` when that location is writable, or `$XDG_DATA_HOME/rl-xar/runs`. A completed run contains `manifest.json`, `round-*/adapter/`, `round-*/rubrics.json`, `round-*/meta_prompt.json`, `test_continuations.json`, `test_evaluation.json`, and `run.json`.
 
