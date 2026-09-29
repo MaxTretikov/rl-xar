@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rlxar"
+version = "0.1.0"
+description = "Rubric-guided reinforcement learning"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = [
+    "accelerate>=1.1,<2",
+    "datasets>=3.0,<5",
+    "litellm>=1.55,<2",
+    "peft>=0.13,<1",
+    "pydantic>=2.8,<3",
+    "rich>=13.9,<15",
+    "torch>=2.5,<3",
+    "transformers>=4.46,<6",
+    "trl>=0.12,<1",
+    "typer>=0.12,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9",
+    "ruff>=0.8,<1",
+]
+
+[project.scripts]
+rlxar = "rlxar.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rlxar"]
+force-include = { "examples/demo.jsonl" = "rlxar/_data/demo.jsonl" }
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/AGENTS.md"]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E4", "E7", "E9", "F", "I", "UP", "B008", "BLE001",
+    "SIM101", "SIM102", "SIM114", "TRY004",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/rlxar/cli.py" = ["B008", "BLE001"]
+"src/rlxar/client.py" = ["BLE001", "TRY004"]
+"src/rlxar/data.py" = ["TRY004"]
+"src/rlxar/reward.py" = ["BLE001", "TRY004"]
+"src/rlxar/rubrics.py" = ["TRY004"]
+"src/rlxar/scoring.py" = ["TRY004"]

@@ -1,0 +1,11 @@
+# Example configuration. Replace the judge model placeholder and set OPENAI_API_KEY before running.
+dataset_path = "demo.jsonl"
+writer_model_id = "Qwen/Qwen2.5-0.5B-Instruct"
+judge_provider = "litellm"
+judge_model = "openai/REPLACE_WITH_JUDGE_MODEL"
+judge_api_key_env = "OPENAI_API_KEY"
+rubric_iterations = 2
+outer_rounds = 1
+grpo_steps = 10
+generations = 2
+seed = 42
