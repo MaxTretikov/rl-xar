@@ -37,20 +37,20 @@ Judge discovery is explicit and consent-gated:
    uv run rlxar judges
    ```
 
-   Trance scans configured chat interfaces and prints each candidate's provider, model, authentication kind, and configuration source. Discovery does not send model inference requests or consume a provider rate limit; depending on the configured interface, Trance may invoke an installed CLI to inspect authentication status. It does not select a judge.
+   Trance scans configured chat interfaces and prints every candidate's canonical provider ID, exact model, authentication kind, and configuration source. Discovery does not send model inference requests or consume a provider rate limit; depending on the configured interface, Trance may invoke an installed CLI to inspect authentication status. It does not select a judge.
 3. If the selected interface requires a key, export it according to the authentication information shown by `rlxar judges` before approving the run. For example:
 
    ```sh
    export OPENAI_API_KEY='your-api-key'
    ```
 
-4. Choose a displayed candidate and approve it before running the pipeline. In an interactive terminal, `rlxar run` presents the discovered candidates and asks for confirmation. For automation, pass both the displayed one-based candidate index and the explicit approval flag:
+4. Choose a displayed candidate and approve it before running the pipeline. Without `--model-provider`, an interactive terminal presents the discovered candidates and asks which one to use and for confirmation. For automation, provide the provider you have approved:
 
    ```sh
-   uv run rlxar run --config examples/local.toml --judge-index 1 --approve-judge
+   uv run rlxar run --config examples/local.toml --model-provider openai
    ```
 
-   `--judge-index` identifies the candidate shown by the scan; `--approve-judge` is the required consent to use it. Discovery results are never acted on without that consent. After approval, rubric and evaluation requests are sent through the chosen interface and may consume its rate limits.
+   `--model-provider` is explicit consent and makes the run noninteractive. The value is matched against Trance's canonical provider IDs, then the first matching discovery result is used. The run still displays all discovered judges and the exact selected model and configuration source before sending requests. Provider aliases include `codex` for `openai-codex` and `grok` for `grok-consumer`; the xAI API provider ID is `xai`. If no provider is supplied, interactive selection and confirmation remain required. A noninteractive run fails closed when the provider is missing or has no matching Trance result. Approved rubric and evaluation requests may consume provider rate limits.
 
 Set `output_dir` in the TOML or `RL_XAR_OUTPUT_DIR` in the environment to choose the external run root. Otherwise runs go to `/mnt/archive/runs/rl-xar` when that location is writable, or `$XDG_DATA_HOME/rl-xar/runs`. A completed run contains `manifest.json`, `round-*/adapter/`, `round-*/rubrics.json`, `round-*/meta_prompt.json`, `test_continuations.json`, `test_evaluation.json`, and `run.json`.
 

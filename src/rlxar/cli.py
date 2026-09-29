@@ -48,7 +48,7 @@ def _judge_field(candidate: object, name: str, default: str = "unknown") -> str:
     return str(value) if value is not None else default
 
 
-def _show_judges(candidates: list[object]) -> None:
+def _show_judges(candidates: list[object], *, invite_selection: bool = True) -> None:
     typer.echo("Trance found these configured chat interfaces (discovery only):")
     for index, candidate in enumerate(candidates, start=1):
         typer.echo(
@@ -57,7 +57,10 @@ def _show_judges(candidates: list[object]) -> None:
             f"auth={_judge_field(candidate, 'auth_kind')} "
             f"source={_judge_field(candidate, 'source')}"
         )
-    typer.echo("No model calls have been made. Choose one only if you want RL-XAR to use it.")
+    if invite_selection:
+        typer.echo("No model calls have been made. Choose one only if you want RL-XAR to use it.")
+    else:
+        typer.echo("No model calls have been made.")
 
 
 def _find_judges() -> list[object]:
@@ -79,30 +82,54 @@ def _is_interactive() -> bool:
     return sys.stdin.isatty()
 
 
-def _select_judge(candidates: list[object], index: int | None, approve: bool) -> object:
-    interactive = _is_interactive()
-    if index is None:
-        if not interactive:
-            typer.echo("Noninteractive use requires --judge-index and --approve-judge.", err=True)
+_PROVIDER_ALIASES = {"codex": "openai-codex", "grok": "grok-consumer"}
+
+
+def _select_judge(candidates: list[object], provider: str | None) -> object:
+    """Select and explicitly approve a candidate, or resolve a provider noninteractively."""
+    if provider is not None:
+        requested = provider.casefold()
+        matching = [
+            candidate
+            for candidate in candidates
+            if _judge_field(candidate, "provider").casefold() == requested
+        ]
+        canonical = _PROVIDER_ALIASES.get(requested)
+        if not matching and canonical is not None:
+            matching = [
+                candidate
+                for candidate in candidates
+                if _judge_field(candidate, "provider").casefold() == canonical
+            ]
+        if not matching:
+            typer.echo(f"No configured Trance interface matches provider '{provider}'.", err=True)
             raise typer.Exit(code=2)
-        index = typer.prompt("Enter the number of the judge to use", type=int)
+        selected = matching[0]
+        typer.echo(
+            "Selected Trance interface: "
+            f"provider={_judge_field(selected, 'provider')} "
+            f"model={_judge_field(selected, 'model_name')} "
+            f"auth={_judge_field(selected, 'auth_kind')} "
+            f"source={_judge_field(selected, 'source')}"
+        )
+        return selected
+
+    if not _is_interactive():
+        typer.echo("Noninteractive use requires --model-provider.", err=True)
+        raise typer.Exit(code=2)
+    index = typer.prompt("Enter the number of the judge to use", type=int)
     if index < 1 or index > len(candidates):
         typer.echo(f"Judge index must be between 1 and {len(candidates)}.", err=True)
         raise typer.Exit(code=2)
-    if not approve:
-        if not interactive:
-            typer.echo("Noninteractive use requires --approve-judge.", err=True)
-            raise typer.Exit(code=2)
-        selected = candidates[index - 1]
-        approve = typer.confirm(
-            f"Use judge {index} ({_judge_field(selected, 'provider')} / "
-            f"{_judge_field(selected, 'model_name')}) for this run?",
-            default=False,
-        )
-    if not approve:
+    selected = candidates[index - 1]
+    if not typer.confirm(
+        f"Use judge {index} ({_judge_field(selected, 'provider')} / "
+        f"{_judge_field(selected, 'model_name')}) for this run?",
+        default=False,
+    ):
         typer.echo("Judge use was not approved; no run was started.")
         raise typer.Exit(code=0)
-    return candidates[index - 1]
+    return selected
 
 
 @app.command("judges")
@@ -121,11 +148,10 @@ def run_command(
         ..., "--config", exists=True, file_okay=True, dir_okay=False,
         readable=True, resolve_path=True, help="TOML run configuration."
     ),
-    judge_index: int | None = typer.Option(
-        None, "--judge-index", min=1, help="1-based Trance judge selection."
-    ),
-    approve_judge: bool = typer.Option(
-        False, "--approve-judge", help="Consent to spend the selected interface's rate limits."
+    model_provider: str | None = typer.Option(
+        None,
+        "--model-provider",
+        help="Provider to use; makes this run noninteractive (for example, openai or anthropic).",
     ),
 ) -> None:
     """Run training and evaluation from a TOML configuration."""
@@ -137,8 +163,8 @@ def run_command(
         if not candidates:
             typer.echo("Trance found no configured chat interfaces. No run was started.")
             raise typer.Exit(code=1)
-        _show_judges(candidates)
-        selected = _select_judge(candidates, judge_index, approve_judge)
+        _show_judges(candidates, invite_selection=model_provider is None)
+        selected = _select_judge(candidates, model_provider)
         judge_client = TranceChatClient(selected)
 
         run_dir = run_pipeline(load_config(config), judge_client=judge_client)
