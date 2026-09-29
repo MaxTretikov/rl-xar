@@ -1,9 +1,6 @@
-# Example configuration. Replace the judge model placeholder and set OPENAI_API_KEY before running.
+# Example configuration. Judge discovery and selection happen at the command line.
 dataset_path = "demo.jsonl"
 writer_model_id = "Qwen/Qwen2.5-0.5B-Instruct"
-judge_provider = "litellm"
-judge_model = "openai/REPLACE_WITH_JUDGE_MODEL"
-judge_api_key_env = "OPENAI_API_KEY"
 rubric_iterations = 2
 outer_rounds = 1
 grpo_steps = 10

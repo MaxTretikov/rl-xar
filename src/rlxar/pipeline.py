@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from . import artifacts
-from .client import LiteLLMClient
+from .client import ChatClient
 from .config import RunConfig
 from .data import load_examples
 from .schema import Example
@@ -18,15 +18,24 @@ from .schema import Example
 def run_pipeline(
     config: RunConfig,
     *,
+    judge_client: ChatClient | None = None,
     dependencies: Mapping[str, Any] | None = None,
 ) -> Path:
     """Train successive adapters and evaluate the final policy on held-out data.
 
-    ``dependencies`` may override named callable components (``rollout``,
-    ``optimizer``, ``generate_rubric``, ``make_reward``, ``train_grpo``,
-    ``evaluate_policy``, ``client_factory``, and ``judge_factory``). This keeps orchestration testable without model or
-    API access while normal runs use the package implementations.
+    ``judge_client`` must be supplied by the caller after any provider
+    discovery and explicit user approval. ``dependencies`` may override named
+    callable components (``rollout``, ``optimizer``, ``generate_rubric``,
+    ``make_reward``, ``train_grpo``, ``evaluate_policy``, and
+    ``judge_factory``). This keeps orchestration testable without model or API
+    access while normal runs use the package implementations.
     """
+    if judge_client is None:
+        raise ValueError(
+            "judge_client is required; review and explicitly approve a discovered chat interface "
+            "before running the RL-XAR pipeline"
+        )
+
     overrides = dependencies or {}
     rubrics = import_module(".rubrics", __package__)
 
@@ -41,7 +50,6 @@ def run_pipeline(
     reward_fn = component("make_reward", ".reward", "make_grpo_reward")
     train_fn = component("train_grpo", ".training", "train_grpo")
     evaluate_fn = component("evaluate_policy", ".evaluation", "evaluate_policy")
-    client_factory = overrides.get("client_factory", LiteLLMClient)
     judge_builder = component("judge_factory", ".scoring", "RubricJudge")
 
     examples = load_examples(config.dataset_path)
@@ -55,14 +63,6 @@ def run_pipeline(
     if config.generations < 2:
         raise ValueError("generations must be at least 2 for GRPO")
 
-    judge_model = config.judge_model
-    if "/" not in judge_model and config.judge_provider != "litellm":
-        judge_model = f"{config.judge_provider}/{judge_model}"
-    judge_client = client_factory(
-        judge_model,
-        base_url=config.judge_base_url,
-        api_key_env=config.judge_api_key_env,
-    )
     judge = judge_builder(judge_client)
 
     config_data = {
@@ -73,7 +73,11 @@ def run_pipeline(
         else getattr(config, field)
         for field in config.__dataclass_fields__
     }
-    config_hash = artifacts.sha256_json(config_data)
+    judge_selection = _safe_judge_selection(judge_client)
+    config_hash = artifacts.sha256_json({
+        "config": config_data,
+        "judge": judge_selection,
+    })
     run_dir = artifacts.create_run_dir(
         "rl-xar",
         runs_root=config.output_dir,
@@ -172,6 +176,7 @@ def run_pipeline(
     })
     artifacts.write_json(run_dir / "run.json", {
         "config": config_data,
+        "judge": judge_selection,
         "config_sha256": config_hash,
         "dataset_path": str(config.dataset_path),
         "split_counts": {key: len(value) for key, value in splits.items()},
@@ -181,6 +186,18 @@ def run_pipeline(
         "test_evaluation": "test_evaluation.json",
     })
     return run_dir
+
+
+def _safe_judge_selection(client: ChatClient) -> dict[str, str] | None:
+    """Record only display-safe identifiers from a selected judge client."""
+    selection = getattr(client, "selection", None)
+    if not isinstance(selection, Mapping):
+        return None
+    allowed = ("provider", "model_name", "auth_kind", "source")
+    values = {key: selection[key] for key in allowed if key in selection}
+    if not values or not all(isinstance(value, str) for value in values.values()):
+        return None
+    return values
 
 
 def _pairs(

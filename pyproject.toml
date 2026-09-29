@@ -12,10 +12,10 @@ license = "Apache-2.0"
 dependencies = [
     "accelerate>=1.1,<2",
     "datasets>=3.0,<5",
-    "litellm>=1.55,<2",
     "peft>=0.13,<1",
     "pydantic>=2.8,<3",
     "rich>=13.9,<15",
+    "trance @ git+https://github.com/MaxTretikov/trance.git@c564bcdf951514e1fc927d2416754c3812dd4e5e",
     "torch>=2.5,<3",
     "transformers>=4.46,<6",
     "trl>=0.12,<1",

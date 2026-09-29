@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import typer
@@ -38,18 +39,111 @@ def _report_value_error(exc: ValueError) -> None:
     raise typer.Exit(code=2) from exc
 
 
+def _judge_field(candidate: object, name: str, default: str = "unknown") -> str:
+    """Read a display-only field without asking a candidate to reveal secrets."""
+    if isinstance(candidate, dict):
+        value = candidate.get(name, default)
+    else:
+        value = getattr(candidate, name, default)
+    return str(value) if value is not None else default
+
+
+def _show_judges(candidates: list[object]) -> None:
+    typer.echo("Trance found these configured chat interfaces (discovery only):")
+    for index, candidate in enumerate(candidates, start=1):
+        typer.echo(
+            f"  {index}. provider={_judge_field(candidate, 'provider')} "
+            f"model={_judge_field(candidate, 'model_name')} "
+            f"auth={_judge_field(candidate, 'auth_kind')} "
+            f"source={_judge_field(candidate, 'source')}"
+        )
+    typer.echo("No model calls have been made. Choose one only if you want RL-XAR to use it.")
+
+
+def _find_judges() -> list[object]:
+    from .trance_judge import discover_judges
+
+    try:
+        return list(discover_judges())
+    except Exception as exc:
+        # Discovery may inspect credential stores; never echo exception text.
+        typer.echo(
+            f"Trance could not scan configured chat interfaces ({type(exc).__name__}).",
+            err=True,
+        )
+        raise typer.Exit(code=1) from None
+
+
+def _is_interactive() -> bool:
+    """Return whether the current invocation can ask an interactive question."""
+    return sys.stdin.isatty()
+
+
+def _select_judge(candidates: list[object], index: int | None, approve: bool) -> object:
+    interactive = _is_interactive()
+    if index is None:
+        if not interactive:
+            typer.echo("Noninteractive use requires --judge-index and --approve-judge.", err=True)
+            raise typer.Exit(code=2)
+        index = typer.prompt("Enter the number of the judge to use", type=int)
+    if index < 1 or index > len(candidates):
+        typer.echo(f"Judge index must be between 1 and {len(candidates)}.", err=True)
+        raise typer.Exit(code=2)
+    if not approve:
+        if not interactive:
+            typer.echo("Noninteractive use requires --approve-judge.", err=True)
+            raise typer.Exit(code=2)
+        selected = candidates[index - 1]
+        approve = typer.confirm(
+            f"Use judge {index} ({_judge_field(selected, 'provider')} / "
+            f"{_judge_field(selected, 'model_name')}) for this run?",
+            default=False,
+        )
+    if not approve:
+        typer.echo("Judge use was not approved; no run was started.")
+        raise typer.Exit(code=0)
+    return candidates[index - 1]
+
+
+@app.command("judges")
+def judges_command() -> None:
+    """List configured chat interfaces found by Trance without making model calls."""
+    candidates = _find_judges()
+    if not candidates:
+        typer.echo("Trance found no configured chat interfaces. No model calls were made.")
+        raise typer.Exit(code=0)
+    _show_judges(candidates)
+
+
 @app.command("run")
 def run_command(
     config: Path = typer.Option(
         ..., "--config", exists=True, file_okay=True, dir_okay=False,
         readable=True, resolve_path=True, help="TOML run configuration."
     ),
+    judge_index: int | None = typer.Option(
+        None, "--judge-index", min=1, help="1-based Trance judge selection."
+    ),
+    approve_judge: bool = typer.Option(
+        False, "--approve-judge", help="Consent to spend the selected interface's rate limits."
+    ),
 ) -> None:
     """Run training and evaluation from a TOML configuration."""
     try:
         from .pipeline import run_pipeline
+        from .trance_judge import TranceChatClient
 
-        run_dir = run_pipeline(load_config(config))
+        candidates = _find_judges()
+        if not candidates:
+            typer.echo("Trance found no configured chat interfaces. No run was started.")
+            raise typer.Exit(code=1)
+        _show_judges(candidates)
+        selected = _select_judge(candidates, judge_index, approve_judge)
+        judge_client = TranceChatClient(selected)
+
+        run_dir = run_pipeline(load_config(config), judge_client=judge_client)
+    except typer.Exit:
+        raise
     except ValueError as exc:
         _report_value_error(exc)
     except Exception as exc:

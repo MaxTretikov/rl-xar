@@ -54,10 +54,6 @@ def test_run_pipeline_orchestrates_rounds_without_split_leakage(
         dataset_path=dataset_path,
         output_dir=runs_root,
         writer_model_id="fake/writer",
-        judge_provider="litellm",
-        judge_model="fake/judge",
-        judge_base_url=None,
-        judge_api_key_env="UNUSED_KEY",
         rubric_iterations=1,
         outer_rounds=2,
         grpo_steps=1,
@@ -67,12 +63,18 @@ def test_run_pipeline_orchestrates_rounds_without_split_leakage(
 
     calls: dict[str, list[Any]] = {
         "rollout": [], "optimizer": [], "rubric": [], "reward": [],
-        "train": [], "evaluate": [], "clients": [],
+        "train": [], "evaluate": [],
     }
 
-    def client_factory(model: str, **kwargs: Any) -> object:
-        calls["clients"].append((model, kwargs))
-        return object()
+    class ApprovedJudgeClient:
+        selection = {
+            "provider": "openai",
+            "model_name": "judge-a",
+            "auth_kind": "api-key",
+            "source": "trance-config",
+        }
+
+    judge_client = ApprovedJudgeClient()
 
     def judge_factory(client: object) -> object:
         return {"client": client}
@@ -121,14 +123,13 @@ def test_run_pipeline_orchestrates_rounds_without_split_leakage(
         calls["evaluate"].append((meta_prompts, examples, outputs))
         return {"heldout_ids": [row.id for row in examples], "score": 0.75}
 
-    run_dir = run_pipeline(config, dependencies={
+    run_dir = run_pipeline(config, judge_client=judge_client, dependencies={
         "rollout": rollout,
         "optimizer": optimizer,
         "generate_rubric": generate_rubric,
         "make_reward": make_reward,
         "train_grpo": train_grpo,
         "evaluate_policy": evaluate_policy,
-        "client_factory": client_factory,
         "judge_factory": judge_factory,
     })
 
@@ -178,6 +179,15 @@ def test_run_pipeline_orchestrates_rounds_without_split_leakage(
     assert not run_dir.is_relative_to(repo)
     metadata = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     assert metadata["split_counts"] == {"train": 2, "validation": 1, "test": 1}
+    assert metadata["judge"] == ApprovedJudgeClient.selection
+    assert metadata["config_sha256"] == artifacts.sha256_json({
+        "config": metadata["config"],
+        "judge": metadata["judge"],
+    })
+    assert metadata["config_sha256"] != artifacts.sha256_json({
+        "config": metadata["config"],
+        "judge": {**metadata["judge"], "model_name": "judge-b"},
+    })
     assert metadata["outer_rounds"][0]["adapter_path"] == str(expected_prior)
     assert json.loads((run_dir / "round-001" / "meta_prompt.json").read_text())["history"] == [
         {"iteration": 1, "path": "trace.json"}

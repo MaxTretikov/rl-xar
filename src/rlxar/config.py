@@ -15,18 +15,14 @@ _ARCHIVE_OUTPUT_DIR = Path("/mnt/archive/runs/rl-xar")
 class RunConfig:
     """Immutable settings for one reproducible training run.
 
-    ``judge_api_key_env`` stores only the name of an environment variable. The
-    secret value itself must be supplied by the runtime and is never loaded
-    from, or serialized to, the TOML configuration.
+    Judge configuration is deliberately absent. The runtime supplies an
+    already-approved chat client after presenting any discovered interfaces to
+    the user.
     """
 
     dataset_path: Path
     output_dir: Path
     writer_model_id: str
-    judge_provider: str
-    judge_model: str
-    judge_base_url: str | None
-    judge_api_key_env: str
     rubric_iterations: int
     outer_rounds: int
     grpo_steps: int
@@ -54,8 +50,6 @@ def load_config(path: Path) -> RunConfig:
     required = {
         "dataset_path",
         "writer_model_id",
-        "judge_provider",
-        "judge_model",
     }
     missing = required - values.keys()
     if missing:
@@ -68,23 +62,10 @@ def load_config(path: Path) -> RunConfig:
     )
 
     writer_model_id = _nonempty_string(values["writer_model_id"], "writer_model_id")
-    judge_provider = _nonempty_string(values["judge_provider"], "judge_provider")
-    judge_model = _nonempty_string(values["judge_model"], "judge_model")
-    judge_base_url = values.get("judge_base_url")
-    if judge_base_url is not None:
-        judge_base_url = _nonempty_string(judge_base_url, "judge_base_url")
-    judge_api_key_env = _nonempty_string(
-        values.get("judge_api_key_env", "OPENAI_API_KEY"), "judge_api_key_env"
-    )
-
     return RunConfig(
         dataset_path=dataset_path,
         output_dir=output_dir,
         writer_model_id=writer_model_id,
-        judge_provider=judge_provider,
-        judge_model=judge_model,
-        judge_base_url=judge_base_url,
-        judge_api_key_env=judge_api_key_env,
         rubric_iterations=_positive_int(values.get("rubric_iterations", 3), "rubric_iterations"),
         outer_rounds=_positive_int(values.get("outer_rounds", 3), "outer_rounds"),
         grpo_steps=_positive_int(values.get("grpo_steps", 100), "grpo_steps"),
