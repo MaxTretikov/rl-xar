@@ -26,7 +26,7 @@ This downloads the default Hugging Face writer (`Qwen/Qwen2.5-0.5B-Instruct`) if
 
 ### Run the configured pipeline
 
-The full pipeline uses a local Hugging Face causal language model as the trainable writer and a chat model for rubric generation, rubric scoring, meta-prompt revision, and held-out evaluation. The writer must be loadable locally by Transformers because it is generated from and LoRA-trained by the process. Chat interfaces are discovered through [Trance](https://github.com/MaxTretikov/trance) and used through Pydantic AI.
+The full pipeline uses a local Hugging Face causal language model as the trainable writer and a chat model for rubric generation, rubric scoring, meta-prompt revision, and held-out evaluation. The writer must be loadable locally by Transformers because it is generated from and LoRA-trained by the process. Chat interfaces are discovered through [Trance](https://github.com/MaxTretikov/trance) 0.2.0 and used through Pydantic AI. RL-XAR installs Pydantic AI directly because Trance keeps provider SDKs optional. After you consent to a selected candidate, RL-XAR lazily converts it to the Pydantic AI model used for judge requests.
 
 Judge settings do not belong in the TOML file. At the start of every `run`,
 `rlxar` asks Trance to scan the chat interfaces configured on the machine.

@@ -2077,6 +2077,7 @@ dependencies = [
     { name = "datasets" },
     { name = "peft" },
     { name = "pydantic" },
+    { name = "pydantic-ai-slim", extra = ["openai"] },
     { name = "rich" },
     { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "torch", version = "2.14.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
@@ -2098,12 +2099,13 @@ requires-dist = [
     { name = "datasets", specifier = ">=3.0,<5" },
     { name = "peft", specifier = ">=0.13,<1" },
     { name = "pydantic", specifier = ">=2.8,<3" },
+    { name = "pydantic-ai-slim", extras = ["openai"], specifier = ">=2.51.0,<3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3,<9" },
     { name = "rich", specifier = ">=13.9,<15" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8,<1" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.5,<3" },
     { name = "torch", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = ">=2.5,<3", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "trance", git = "https://github.com/MaxTretikov/trance.git?rev=c564bcdf951514e1fc927d2416754c3812dd4e5e" },
+    { name = "trance", specifier = ">=0.2.0,<0.3" },
     { name = "transformers", specifier = ">=4.46,<6" },
     { name = "trl", specifier = ">=0.12,<1" },
     { name = "typer", specifier = ">=0.12,<1" },
@@ -2393,10 +2395,11 @@ wheels = [
 
 [[package]]
 name = "trance"
-version = "0.1.0"
-source = { git = "https://github.com/MaxTretikov/trance.git?rev=c564bcdf951514e1fc927d2416754c3812dd4e5e#c564bcdf951514e1fc927d2416754c3812dd4e5e" }
-dependencies = [
-    { name = "pydantic-ai-slim", extra = ["openai"] },
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/54/9f/764b8d756411bce2ce2b3c202fc64338259a33ef792b5234c4037e72324d/trance-0.2.0.tar.gz", hash = "sha256:669e6482dad5f97888f2c93f8f7d8c63c886a7a3e853477216395ec4a09977ca", size = 157459, upload-time = "2026-09-30T02:43:18.185Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ba/32/71898101f7baaca3a5bece8ab28835527f66ed7b393cb8be9b62269bfb70/trance-0.2.0-py3-none-any.whl", hash = "sha256:90aca7581599b04add7b9dfe88ab06e0ef9c6bbc353e6be08739bae258c39ce5", size = 71125, upload-time = "2026-09-30T02:43:16.895Z" },
 ]
 
 [[package]]

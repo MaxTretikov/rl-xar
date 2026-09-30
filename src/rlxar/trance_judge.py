@@ -1,4 +1,4 @@
-"""Pydantic AI judge clients backed by locally discovered Trance models.
+"""Pydantic AI judge clients backed by locally discovered Trance candidates.
 
 Discovery is deliberately separate from use. :func:`discover_judges` delegates
 to ``trance.scan`` and does not send a model inference request. A
@@ -16,11 +16,11 @@ from typing import TYPE_CHECKING
 from .client import ChatClient
 
 if TYPE_CHECKING:
-    from trance import FoundModel
+    from trance import Candidate
 
 
-def discover_judges() -> list[FoundModel]:
-    """Return models found in local chat-interface configuration.
+def discover_judges() -> list[Candidate]:
+    """Return candidates found in local chat-interface configuration.
 
     Trance's scan does not perform model inference. It may inspect configured
     chat interfaces and their local authentication state. Importing Trance
@@ -41,21 +41,22 @@ def discover_judges() -> list[FoundModel]:
 
 
 class TranceChatClient(ChatClient):
-    """Use a user-selected Trance model through Pydantic AI.
+    """Use a user-selected Trance candidate through Pydantic AI.
 
     Constructing this client performs no inference. The Pydantic AI agent is
     created lazily as well, so a caller can display discovered models and ask
     for consent before any provider adapter is initialized.
     """
 
-    def __init__(self, found_model: FoundModel) -> None:
-        self._found_model = found_model
+    def __init__(self, candidate: Candidate) -> None:
+        self._candidate = candidate
+        self._model: object = _UNSET
         self._selection = MappingProxyType(
             {
-                "provider": found_model.provider,
-                "model_name": found_model.model_name,
-                "auth_kind": found_model.auth_kind,
-                "source": found_model.source,
+                "provider": candidate.provider,
+                "model_name": candidate.model_name,
+                "auth_kind": candidate.auth_kind,
+                "source": candidate.source,
             }
         )
 
@@ -70,14 +71,22 @@ class TranceChatClient(ChatClient):
 
     def complete(self, system: str, user: str) -> str:
         """Send one system/user request and return its text output."""
+        if self._model is _UNSET:
+            try:
+                self._model = self._candidate.to_pydantic_ai()
+            except Exception as exc:  # noqa: BLE001
+                # Adapter errors can include URLs, headers, or credentials.
+                raise RuntimeError(f"Judge adapter failed ({type(exc).__name__}).") from None
+
         try:
             from pydantic_ai import Agent
-        except ImportError as exc:
+        except ImportError:
             raise RuntimeError(
-                "Pydantic AI is required for TranceChatClient; install the project dependencies."
-            ) from exc
+                "Pydantic AI is required for TranceChatClient; install it in the "
+                "application environment."
+            ) from None
         try:
-            agent = Agent(self._found_model.model, system_prompt=system)
+            agent = Agent(self._model, system_prompt=system)
             result = agent.run_sync(user)
         except Exception as exc:  # noqa: BLE001
             # Provider and adapter errors can include URLs, headers, prompts,
@@ -93,3 +102,6 @@ class TranceChatClient(ChatClient):
                 "Judge returned non-text output; expected a string response."
             )
         return output
+
+
+_UNSET = object()
